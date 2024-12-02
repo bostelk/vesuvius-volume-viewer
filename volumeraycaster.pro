@@ -23,6 +23,7 @@ qml_resources.files = \
     OriginGizmo.qml \
     Spinner.qml \
     images/circle.png \
+    images/colormap-blackwhite.png \
     images/colormap-coolwarm.png \
     images/colormap-gist_rainbow.png \
     images/colormap-gnuplot.png \

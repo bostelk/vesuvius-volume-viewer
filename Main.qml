@@ -60,14 +60,16 @@ ApplicationWindow {
     function getColormapSource(currentIndex) {
         switch (currentIndex) {
         case 0:
-            return "images/colormap-coolwarm.png"
+            return "images/colormap-blackwhite.png"
         case 1:
-            return "images/colormap-plasma.png"
+            return "images/colormap-coolwarm.png"
         case 2:
-            return "images/colormap-viridis.png"
+            return "images/colormap-plasma.png"
         case 3:
-            return "images/colormap-rainbow.png"
+            return "images/colormap-viridis.png"
         case 4:
+            return "images/colormap-rainbow.png"
+        case 5:
             return "images/colormap-gnuplot.png"
         default:
             break
@@ -453,7 +455,7 @@ ApplicationWindow {
 
             ComboBox {
                 id: colormapCombo
-                model: [qsTr("Cool Warm"), qsTr("Plasma"), qsTr("Viridis"), qsTr("Rainbow"), qsTr("Gnuplot")]
+                model: [qsTr("Black White"), qsTr("Cool Warm"), qsTr("Plasma"), qsTr("Viridis"), qsTr("Rainbow"), qsTr("Gnuplot")]
             }
 
             Label {
@@ -672,6 +674,24 @@ ApplicationWindow {
             Button {
                 text: qsTr("Load Volume...")
                 onClicked: fileDialog.open()
+            }
+
+            Button {
+                text: qsTr("Load Scroll 1...")
+                onClicked: {
+                        volumeTextureData.loadAsync("https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr", 128,
+                                                    128, 128, "uint8")
+                        spinner.running = true
+                }
+            }
+
+            Button {
+                text: qsTr("Load Scroll 5...")
+                onClicked: {
+                        volumeTextureData.loadAsync("https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/", 128,
+                                                    128, 128, "uint8")
+                        spinner.running = true
+                }
             }
         }
     }

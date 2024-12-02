@@ -23,11 +23,15 @@ set_target_properties(volumeraycaster PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
+pkg_check_modules(BLOSC2 REQUIRED blosc2)
+include_directories(${BLOSC2_INCLUDE_DIRS})
+
 target_link_libraries(volumeraycaster PUBLIC
     Qt::Core
     Qt::Gui
     Qt::Quick
     Qt::Quick3D
+    ${BLOSC2_LIBRARIES}
 )
 
 if(OpenMP_CXX_FOUND AND NOT ANDROID)
@@ -46,6 +50,7 @@ qt_add_qml_module(volumeraycaster
         Spinner.qml
     RESOURCES
         images/circle.png
+        images/colormap-blackwhite.png
         images/colormap-coolwarm.png
         images/colormap-gist_rainbow.png
         images/colormap-gnuplot.png

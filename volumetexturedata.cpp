@@ -7,6 +7,15 @@
 #include <QFile>
 #include <QElapsedTimer>
 
+#include <QDebug>
+#include <QCoreApplication>
+#include <QEventLoop>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QNetworkAccessManager>
+
+#include <blosc2.h> //Zarr volume.
+
 QT_BEGIN_NAMESPACE
 
 enum ExampleId { Helix, Box, Colormap };
@@ -181,7 +190,38 @@ static QByteArray createBuiltinVolume(int exampleId)
     return byteArray;
 }
 
-static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData &input)
+static QByteArray decompressZarrChunk(QByteArray data, int depth, int width, int height)
+{
+    qsizetype decompressed_size_bytes = depth * width * height;
+    unsigned char* decompressed_data = (unsigned char*)malloc(decompressed_size_bytes);
+
+    /* Decompress  */
+    int err = blosc2_decompress(data.constData(), data.size(), decompressed_data, decompressed_size_bytes);
+    if (err < 0) {
+        free(decompressed_data);
+        qWarning() << "Blosc2 Decompression error. Error code: " << err;
+        return QByteArray();
+    }
+
+    QByteArray newData((const char* )decompressed_data, decompressed_size_bytes);
+
+    free(decompressed_data);
+    return newData;
+}
+
+static QUrl getZarrChunkUrl(const QUrl zarrUrl, int level, int z, int y, int x) {
+    QString levelPath = QString("/%1").arg(level);
+    QString chunkResourcePath = QString("/%1/%2/%3")
+        .arg(z)
+        .arg(y)
+        .arg(x);
+    QString combinedPath = zarrUrl.path() + levelPath + chunkResourcePath;
+    QUrl combinedPathUrl(combinedPath);
+    QUrl zarrChunkURL = zarrUrl.resolved(combinedPathUrl);
+    return zarrChunkURL;
+}
+
+static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
 
@@ -191,6 +231,39 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
         imageDataSource = createBuiltinVolume(ExampleId::Box);
     } else if (input.source == QUrl("file:///default_colormap")) {
         imageDataSource = createBuiltinVolume(ExampleId::Colormap);
+    } else if (input.source.scheme() == "http" || input.source.scheme() == "https") {
+        QUrl zarrChunkURL = getZarrChunkUrl(input.source, 0, 84, 26, 19);
+        qDebug() << "Fetch: " << zarrChunkURL;
+
+        QNetworkRequest netRequest(zarrChunkURL);
+        QNetworkAccessManager* manager = new QNetworkAccessManager();
+
+        // Create an event loop to block until the request finishes
+        QEventLoop loop;
+
+        // Connect the finished signal to quit the event loop
+        QObject::connect(manager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit);
+
+        // Make the request
+        QNetworkReply* reply = manager->get(netRequest);
+
+        // Enter the event loop and block until the request is finished
+        loop.exec();
+
+        // Once finished, handle the reply
+        if (reply->error() == QNetworkReply::NoError) {
+            // Success: process the reply data
+            QByteArray data = reply->readAll();
+            imageDataSource = decompressZarrChunk(data, input.depth, input.width, input.height);
+            qDebug() << "Reply data:" << data.size();
+        }
+        else {
+            // Error handling
+            qDebug() << "Error:" << reply->errorString();
+        }
+
+        // Clean up the reply
+        reply->deleteLater();
     } else {
         // NOTE: we always assume a local file is opened
         QFile file(input.source.toLocalFile());
