@@ -403,10 +403,18 @@ ApplicationWindow {
     //! [origingizmo]
 
     RoundButton {
-        id: iconOpen
-        text: "\u2630" // Unicode Character 'TRIGRAM FOR HEAVEN', no qsTr()
-        x: settingsPane.x + settingsPane.width + 10
+        id: iconOpenScrolls
+        text: "\u222D" // Unicode Character 'TRIPPLE INTEGRAL', no qsTr()
+        x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
         y: 10
+        onClicked: volumesPane.toggleHide()
+    }
+
+    RoundButton {
+        id: iconOpenSettings
+        text: "\u2699" // Unicode Character 'GEAR', no qsTr()
+        x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
+        y: iconOpenScrolls.y + iconOpenScrolls.height + 10
         onClicked: settingsPane.toggleHide()
     }
 
@@ -420,13 +428,154 @@ ApplicationWindow {
 
     Label {
         id: infoLabel
-        text: qsTr("Cursor: ?, ?, ? (<font color='#268bd2'>z</font>, <font color='#859900'>y</font>, <font color='#dc322f'>x</font>)")
+        text: qsTr("Cursor: ?, ?, ? (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>)")
         anchors.horizontalCenter: parent.horizontalCenter 
         anchors.bottom: parent.bottom
         anchors.margins: 10
 
         function setPosition(localPoint, globalPoint) {
-            text = qsTr("Focus Point (<font color='#9400d3'>\u2297</font>): %1, %2, %3 (<font color='#268bd2'>z</font>, <font color='#859900'>y</font>, <font color='#dc322f'>x</font>)").arg(globalPoint.z).arg(globalPoint.y).arg(globalPoint.x)
+            text = qsTr("Focus Point (<font color='#9400d3'>\u2297</font>): %1, %2, %3 (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>)").arg(globalPoint.z).arg(globalPoint.y).arg(globalPoint.x)
+        }
+    }
+
+    ScrollView {
+        id: volumesPane
+        height: parent.height
+        property bool hidden: true
+        x: -volumesPane.width
+
+        function toggleHide() {
+            if (volumesPane.hidden) {
+                volumesPaneAnimation.from = volumesPane.x
+                volumesPaneAnimation.to = 0
+
+                if (!settingsPane.hidden) {
+                    settingsPane.toggleHide()
+                }
+            } else {
+                volumesPaneAnimation.from = volumesPane.x
+                volumesPaneAnimation.to = -volumesPane.width
+            }
+            volumesPane.hidden = !volumesPane.hidden
+            volumesPaneAnimation.running = true
+        }
+
+        NumberAnimation on x {
+            id: volumesPaneAnimation
+            running: false
+            from: width
+            to: width
+            duration: 100
+        }
+
+        Column {
+            topPadding: 10
+            bottomPadding: 10
+            leftPadding: 20
+            rightPadding: 20
+
+            Label {
+                text: qsTr("Load Zarr Volume:")
+            }
+
+            spacing: 10
+            Label {
+                text: qsTr("Focus point (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>):")
+            }
+
+            Row {
+                spacing: 5
+                TextField {
+                    id: pointZ
+                    text: "10835"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
+                }
+                TextField {
+                    id: pointY
+                    text: "2602"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
+                }
+                TextField {
+                    id: pointX
+                    text: "2712"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
+                }
+            }
+
+            ComboBox {
+                id: scrollCombo
+                model: [qsTr("Scroll1A"), qsTr("Scroll5"), qsTr("Scroll1A - Fiber")]
+            }
+
+            Button {
+                text: qsTr("Load Volume...")
+                onClicked: {
+                        var url = ""
+                        if (scrollCombo.currentText == "Scroll1A") {
+                            url = "https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr"
+                        } else if (scrollCombo.currentText == "Scroll5") {
+                            url = "https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/"
+                        } else if (scrollCombo.currentText == "Scroll1A - Fiber") {
+                            url = "https://dl.ash2txt.org/community-uploads/bruniss/Fiber-and-Surface-Models/Predictions/s1/mask-2ext-surface_erode_evenmore_ome.zarr/"
+                        }
+                        var point = Qt.vector3d(parseInt(pointX.text), parseInt(pointY.text), parseInt(pointZ.text))
+                        volumeTextureData.loadAsync(url, 128, 128, 128, "uint8", point)
+                        spinner.running = true
+                }
+            }
+
+            Label {
+                text: qsTr("Load Built-in Volume:")
+            }
+
+            Row {
+                spacing: 5
+
+                Button {
+                    text: qsTr("Helix")
+                    onClicked: {
+                        volumeTextureData.loadAsync("file:///default_helix",
+                                                    256, 256, 256, "uint8")
+                        spinner.running = true
+                    }
+                }
+
+                Button {
+                    text: qsTr("Box")
+                    onClicked: {
+                        volumeTextureData.loadAsync("file:///default_box", 256,
+                                                    256, 256, "uint8")
+                        spinner.running = true
+                    }
+                }
+
+                Button {
+                    text: qsTr("Colormap")
+                    onClicked: {
+                        volumeTextureData.loadAsync("file:///default_colormap",
+                                                    256, 256, 256, "uint8")
+                        spinner.running = true
+                    }
+                }
+            }
+
+            Label {
+                text: qsTr("Load On-disk Volume:")
+            }
+
+            Button {
+                text: qsTr("Load Volume...")
+                onClicked: fileDialog.open()
+            }
         }
     }
 
@@ -440,6 +589,10 @@ ApplicationWindow {
             if (settingsPane.hidden) {
                 settingsPaneAnimation.from = settingsPane.x
                 settingsPaneAnimation.to = 0
+                
+                if (!volumesPane.hidden) {
+                    volumesPane.toggleHide()
+                }
             } else {
                 settingsPaneAnimation.from = settingsPane.x
                 settingsPaneAnimation.to = -settingsPane.width
@@ -673,98 +826,6 @@ ApplicationWindow {
             ComboBox {
                 id: dataTypeComboBox
                 model: ["uint8", "uint16", "int16", "float32", "float64"]
-            }
-
-            Label {
-                text: qsTr("Load Built-in Volume:")
-            }
-
-            Row {
-                spacing: 5
-
-                Button {
-                    text: qsTr("Helix")
-                    onClicked: {
-                        volumeTextureData.loadAsync("file:///default_helix",
-                                                    256, 256, 256, "uint8")
-                        spinner.running = true
-                    }
-                }
-
-                Button {
-                    text: qsTr("Box")
-                    onClicked: {
-                        volumeTextureData.loadAsync("file:///default_box", 256,
-                                                    256, 256, "uint8")
-                        spinner.running = true
-                    }
-                }
-
-                Button {
-                    text: qsTr("Colormap")
-                    onClicked: {
-                        volumeTextureData.loadAsync("file:///default_colormap",
-                                                    256, 256, 256, "uint8")
-                        spinner.running = true
-                    }
-                }
-            }
-
-            Button {
-                text: qsTr("Load Volume...")
-                onClicked: fileDialog.open()
-            }
-
-            Label {
-                text: qsTr("Focus point (z, y, x):")
-            }
-
-            Row {
-                spacing: 5
-                TextField {
-                    id: pointZ
-                    text: "10835"
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 999999
-                    }
-                }
-                TextField {
-                    id: pointY
-                    text: "2602"
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 999999
-                    }
-                }
-                TextField {
-                    id: pointX
-                    text: "2712"
-                    validator: IntValidator {
-                        bottom: 0
-                        top: 999999
-                    }
-                }
-            }
-
-            ComboBox {
-                id: scrollCombo
-                model: [qsTr("Scroll1A"), qsTr("Scroll5")]
-            }
-
-            Button {
-                text: qsTr("Load Scroll...")
-                onClicked: {
-                        var url = ""
-                        if (scrollCombo.currentText == "Scroll1A") {
-                            url = "https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr"
-                        } else if (scrollCombo.currentText == "Scroll5") {
-                            url = "https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/"
-                        }
-                        var point = Qt.vector3d(parseInt(pointX.text), parseInt(pointY.text), parseInt(pointZ.text))
-                        volumeTextureData.loadAsync(url, 128, 128, 128, "uint8", point)
-                        spinner.running = true
-                }
             }
         }
     }
