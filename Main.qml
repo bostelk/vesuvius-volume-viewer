@@ -7,9 +7,11 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 import Qt.labs.folderlistmodel
 import QtQuick.Controls.Universal
+import QtQuick.Layouts
 
 import VolumetricExample
 import "SpacingMap.mjs" as SpacingMap
+import Qt.labs.qmlmodels
 
 ApplicationWindow {
     id: window
@@ -244,7 +246,9 @@ ApplicationWindow {
             //! [bounding-boxes]
             Model {
                 visible: drawBoundingBox.checked
-                geometry: LineBoxGeometry {}
+                geometry: LineBoxGeometry {
+                    size: 50
+                }
                 materials: PrincipledMaterial {
                     baseColor: "#323232"
                     lighting: PrincipledMaterial.NoLighting
@@ -255,7 +259,9 @@ ApplicationWindow {
 
             Model {
                 visible: drawBoundingBox.checked
-                geometry: LineBoxGeometry {}
+                geometry: LineBoxGeometry {
+                    size: 50
+                }
                 materials: PrincipledMaterial {
                     baseColor: "#323232"
                     lighting: PrincipledMaterial.NoLighting
@@ -397,6 +403,21 @@ ApplicationWindow {
                     geometry.center = point
                 }
             }
+
+            InstanceList {
+                id: boxInstancing
+                instances: []
+            }
+            Model {
+                id: box
+                instancing: boxInstancing
+                geometry: LineBoxGeometry {}
+                materials: PrincipledMaterial { 
+                    baseColor: "cyan" 
+                    lighting: PrincipledMaterial.NoLighting
+                }
+                pickable: true
+            }
         }
         //! [cube]
 
@@ -485,7 +506,9 @@ ApplicationWindow {
                                 settingsPane.toggleHide()
                             } else if (event.key === Qt.Key_V) {
                                 volumesPane.toggleHide()
-                            }  else if (event.key === Qt.Key_Left
+                            } else if (event.key === Qt.Key_M) {
+                                measurementPane.toggleHide()
+                            } else if (event.key === Qt.Key_Left
                                        || event.key === Qt.Key_A) {
                                 let rotation = originGizmo.quaternionRotateLeft(
                                     arcballController.controlledObject.rotation)
@@ -518,19 +541,39 @@ ApplicationWindow {
     RoundButton {
         id: iconOpenVolumes
         text: "\u222D" // Unicode Character 'TRIPPLE INTEGRAL', no qsTr()
-        x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
+        x: Math.max(Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10), measurementPane.x + measurementPane.width + 10)
         y: 10
         onClicked: volumesPane.toggleHide()
+        
+        ToolTip.delay: 1000
+        ToolTip.visible: hovered
+        ToolTip.text: qsTr("Volumes Menu.")
+    }
+    
+    RoundButton {
+        id: iconOpenMeasurement
+        text: "\u22BE" // Unicode Character 'RIGTH ANGLE WITH ARC', no qsTr()
+        x: Math.max(Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10), measurementPane.x + measurementPane.width + 10)
+        y: iconOpenVolumes.y + iconOpenVolumes.height + 10
+        onClicked: measurementPane.toggleHide()
+
+        ToolTip.delay: 1000
+        ToolTip.visible: hovered
+        ToolTip.text: qsTr("Measurement Menu.")
     }
 
     RoundButton {
         id: iconOpenSettings
         text: "\u2699" // Unicode Character 'GEAR', no qsTr()
-        x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
-        y: iconOpenVolumes.y + iconOpenVolumes.height + 10
+        x: Math.max(Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10), measurementPane.x + measurementPane.width + 10)
+        y: iconOpenMeasurement.y + iconOpenMeasurement.height + 10
         onClicked: settingsPane.toggleHide()
+        
+        ToolTip.delay: 1000
+        ToolTip.visible: hovered
+        ToolTip.text: qsTr("Settings Menu.")
     }
-
+   
     Spinner {
         id: spinner
         running: false
@@ -541,7 +584,7 @@ ApplicationWindow {
 
     Label {
         id: infoLabel
-        text: qsTr("Cursor: ?, ?, ? (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>)")
+        text: qsTr("Cursor: 0, 0, 0 (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>)")
         anchors.horizontalCenter: parent.horizontalCenter 
         anchors.bottom: parent.bottom
         anchors.margins: 10
@@ -565,6 +608,9 @@ ApplicationWindow {
                 if (!settingsPane.hidden) {
                     settingsPane.toggleHide()
                 }
+                if (!measurementPane.hidden) {
+                    measurementPane.toggleHide()
+                }
             } else {
                 volumesPaneAnimation.from = volumesPane.x
                 volumesPaneAnimation.to = -volumesPane.width
@@ -587,11 +633,8 @@ ApplicationWindow {
             leftPadding: 20
             rightPadding: 20
 
-            Label {
-                text: qsTr("Load Zarr Volume:")
-            }
-
             spacing: 10
+
             Label {
                 text: qsTr("Focus point (<font color='#268bd2'>Z</font>, <font color='#859900'>Y</font>, <font color='#dc322f'>X</font>):")
             }
@@ -622,6 +665,10 @@ ApplicationWindow {
                         top: 999999
                     }
                 }
+            }
+
+            Label {
+                text: qsTr("Load Zarr Volume:")
             }
 
             ComboBox {
@@ -692,6 +739,152 @@ ApplicationWindow {
         }
     }
 
+    ScrollView {
+        id: measurementPane
+        height: parent.height
+        property bool hidden: true
+        x: -measurementPane.width
+
+        function toggleHide() {
+            if (measurementPane.hidden) {
+                measurementPaneAnimation.from = measurementPane.x
+                measurementPaneAnimation.to = 0
+
+                if (!settingsPane.hidden) {
+                    settingsPane.toggleHide()
+                }
+                if (!volumesPane.hidden) {
+                    volumesPane.toggleHide()
+                }
+            } else {
+                measurementPaneAnimation.from = measurementPane.x
+                measurementPaneAnimation.to = -measurementPane.width
+            }
+            measurementPane.hidden = !measurementPane.hidden
+            measurementPaneAnimation.running = true
+        }
+
+        NumberAnimation on x {
+            id: measurementPaneAnimation
+            running: false
+            from: width
+            to: width
+            duration: 100
+        }
+
+        Column {
+            topPadding: 10
+            bottomPadding: 10
+            leftPadding: 20
+            rightPadding: 20
+
+            spacing: 10
+
+            Label {
+                text: qsTr("Select a mode:")
+            }
+
+            RowLayout {
+                RadioButton {
+                    id: measureModeSelect
+                    checked: true
+                    text: qsTr("Select")
+                }
+                RadioButton {
+                    id: measureModeAdd
+                    text: qsTr("Add")
+                }
+                RadioButton {
+                    id: measureModeRemove
+                    text: qsTr("Remove")
+                }
+            }
+
+            HorizontalHeaderView {
+                id: horizontalHeader
+                syncView: tableView
+                width: 500
+                height: 30
+                model: [qsTr("x"), qsTr("y"), qsTr("z"), qsTr("sx"), qsTr("sy"), qsTr("sz"), qsTr("rx"), qsTr("ry"), qsTr("rz")]
+                clip: true
+            }
+
+            TableView {
+                id: tableView
+                width: 500
+                height: window.height
+                columnSpacing: 1
+                rowSpacing: 1
+                clip: true
+
+                model: TableModel {
+                    id: boxTable
+
+                    TableModelColumn { display: "positionX" }
+                    TableModelColumn { display: "positionY" }
+                    TableModelColumn { display: "positionZ" }
+                    TableModelColumn { display: "scaleX" }
+                    TableModelColumn { display: "scaleY" }
+                    TableModelColumn { display: "scaleZ" }
+                    TableModelColumn { display: "rotationX" }
+                    TableModelColumn { display: "rotationY" }
+                    TableModelColumn { display: "rotationZ" }
+
+                    rows: []
+                }
+
+                selectionModel: ItemSelectionModel {}
+
+                delegate: Rectangle {
+                    implicitWidth: 80
+                    implicitHeight: 30
+
+                    color: Universal.background
+
+                    Text {
+                        anchors.fill: parent
+                        text: display
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        color: Universal.foreground
+                    }
+
+                    TableView.editDelegate: TextField {
+                        anchors.fill: parent
+                        text: display
+                        horizontalAlignment: TextInput.AlignHCenter
+                        verticalAlignment: TextInput.AlignVCenter
+                        Component.onCompleted: selectAll()
+
+                        TableView.onCommit: {
+                            display = text
+                            var instance = boxTable.getRow(row).instance
+                            if (column == 0) { // position
+                                instance.position.x = parseFloat(text)
+                            } else if (column == 1) {
+                                instance.position.y = parseFloat(text)
+                            } else if (column == 2) {
+                                instance.position.z = parseFloat(text)
+                            } else if (column == 3) {
+                                instance.scale.x = parseFloat(text)
+                            } else if (column == 4) {
+                                instance.scale.y = parseFloat(text)
+                            } else if (column == 5) {
+                                instance.scale.z = parseFloat(text)
+                            } else if (column == 6) {
+                                instance.eulerRotation.x = parseFloat(text)
+                            } else if (column == 7) {
+                                instance.eulerRotation.y = parseFloat(text)
+                            } else if (column == 8) {
+                                instance.eulerRotation.z = parseFloat(text)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     //! [settings]
     ScrollView {
         id: settingsPane
@@ -705,6 +898,9 @@ ApplicationWindow {
                 
                 if (!volumesPane.hidden) {
                     volumesPane.toggleHide()
+                }
+                if (!measurementPane.hidden) {
+                    measurementPane.toggleHide()
                 }
             } else {
                 settingsPaneAnimation.from = settingsPane.x
@@ -957,8 +1153,39 @@ ApplicationWindow {
             if (result.objectHit) {
                 var pickedObject = result.objectHit
                 var distance = result.scenePosition.minus(cursorModel.centroid).length()
-                console.log("Picked: " + pickedObject.name)
+                console.log("Picked: " + pickedObject.displayName)
                 console.log("Distance: " + distance)
+                if (measureModeSelect.checked) {
+                    
+                } else if (measureModeAdd.checked) {
+                    //var instance = Qt.createComponent("QtQuick3D", "InstanceListEntry", Component.Asynchronous, boxInstancing) This method does not work ???
+                    var instance = Qt.createQmlObject(`
+                        import QtQuick3D
+
+                        InstanceListEntry {
+                        }
+                        `,
+                        boxInstancing
+                    )
+                    instance.position = result.scenePosition
+                    instance.scale = Qt.vector3d(10, 10, 10)
+                    boxInstancing.instances.push(instance)
+                    boxTable.appendRow({
+                        "instance": instance,
+                        "positionX": instance.position.x.toFixed(3),
+                        "positionY": instance.position.y.toFixed(3),
+                        "positionZ": instance.position.z.toFixed(3),
+                        "scaleX": instance.scale.x.toFixed(3),
+                        "scaleY": instance.scale.y.toFixed(3),
+                        "scaleZ": instance.scale.z.toFixed(3),
+                        "rotationX": instance.eulerRotation.x.toFixed(3),
+                        "rotationY": instance.eulerRotation.y.toFixed(3),
+                        "rotationZ": instance.eulerRotation.z.toFixed(3)
+                    })
+                } else if (measureModeRemove.checked) {
+                    pickedObject.instancing.instances.splice(result.instanceIndex, 1)
+                    boxTable.removeRow(result.instanceIndex)
+                }
             }
         }
     }

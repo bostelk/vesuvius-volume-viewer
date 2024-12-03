@@ -8,20 +8,25 @@
 
 LineBoxGeometry::LineBoxGeometry()
 {
+    updateData();
+}
+
+void LineBoxGeometry::updateData()
+{
     constexpr int kStride = sizeof(QVector3D);
 
     QByteArray vertexData(24 * kStride, Qt::Initialization::Uninitialized);
-    QVector3D *p = reinterpret_cast<QVector3D *>(vertexData.data());
+    QVector3D* p = reinterpret_cast<QVector3D*>(vertexData.data());
 
     std::array<QVector3D, 8> pts;
-    pts[0] = QVector3D(-50, -50, -50);
-    pts[1] = QVector3D(-50, -50, +50);
-    pts[2] = QVector3D(-50, +50, +50);
-    pts[3] = QVector3D(-50, +50, -50);
-    pts[4] = QVector3D(+50, -50, -50);
-    pts[5] = QVector3D(+50, -50, +50);
-    pts[6] = QVector3D(+50, +50, +50);
-    pts[7] = QVector3D(+50, +50, -50);
+    pts[0] = QVector3D(-m_size, -m_size, -m_size);
+    pts[1] = QVector3D(-m_size, -m_size, +m_size);
+    pts[2] = QVector3D(-m_size, +m_size, +m_size);
+    pts[3] = QVector3D(-m_size, +m_size, -m_size);
+    pts[4] = QVector3D(+m_size, -m_size, -m_size);
+    pts[5] = QVector3D(+m_size, -m_size, +m_size);
+    pts[6] = QVector3D(+m_size, +m_size, +m_size);
+    pts[7] = QVector3D(+m_size, +m_size, -m_size);
     // left side
     *p = pts[0];
     p++;
@@ -76,9 +81,17 @@ LineBoxGeometry::LineBoxGeometry()
 
     setVertexData(vertexData);
     setStride(kStride);
-    setBounds(QVector3D(-50.0f, -50.0f, -50.0f), QVector3D(+50.0f, +50.0f, +50.0f));
+    setBounds(QVector3D(-m_size, -m_size, -m_size), QVector3D(+m_size, +m_size, +m_size));
 
     setPrimitiveType(QQuick3DGeometry::PrimitiveType::Lines);
 
     addAttribute(QQuick3DGeometry::Attribute::PositionSemantic, 0, QQuick3DGeometry::Attribute::F32Type);
+}
+
+void LineBoxGeometry::setSize(float size)
+{
+    m_size = size;
+    updateData();
+    update();
+    emit sizeChanged();
 }
