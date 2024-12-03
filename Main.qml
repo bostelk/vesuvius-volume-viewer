@@ -104,7 +104,7 @@ ApplicationWindow {
 
     Connections {
         target: volumeTextureData
-        function onLoadSucceeded(source, width, height, depth, dataType) {
+        function onLoadSucceeded(source, width, height, depth, dataType, localFocusPoint, globalFocusPoint) {
             var spacing = SpacingMap.get(String(source)).times(
                         Qt.vector3d(width, height, depth).normalized())
             let maxSide = Math.max(Math.max(spacing.x, spacing.y), spacing.z)
@@ -137,6 +137,9 @@ ApplicationWindow {
             stepLengthText.text = parseFloat((1 / cubeModel.maxSide).toFixed(6))
             volumeTextureData.source = source
             spinner.running = false
+
+            cursorModel.setPosition(localFocusPoint)
+            infoLabel.setPosition(localFocusPoint, globalFocusPoint)
         }
         function onLoadFailed(source, width, height, depth, dataType) {
             spinner.running = false
@@ -265,6 +268,24 @@ ApplicationWindow {
                                    zSliceWidthSlider.value)
             }
             //! [bounding-boxes]
+
+            Model {
+                id: cursorModel
+                visible: drawCursor.checked
+                geometry: LineCrossGeometry {
+                    size: 100.0
+                }
+                materials: PrincipledMaterial {
+                    baseColor: "#9400d3"
+                    lighting: PrincipledMaterial.NoLighting
+                }
+                receivesShadows: false
+                castsShadows: false
+
+                function setPosition(localPoint) {
+                    geometry.center = localPoint
+                }
+            }
         }
         //! [cube]
 
@@ -397,6 +418,18 @@ ApplicationWindow {
         anchors.margins: 10
     }
 
+    Label {
+        id: infoLabel
+        text: qsTr("Cursor: ?, ?, ? (<font color='#268bd2'>z</font>, <font color='#859900'>y</font>, <font color='#dc322f'>x</font>)")
+        anchors.horizontalCenter: parent.horizontalCenter 
+        anchors.bottom: parent.bottom
+        anchors.margins: 10
+
+        function setPosition(localPoint, globalPoint) {
+            text = qsTr("Focus Point (<font color='#9400d3'>\u2297</font>): %1, %2, %3 (<font color='#268bd2'>z</font>, <font color='#859900'>y</font>, <font color='#dc322f'>x</font>)").arg(globalPoint.z).arg(globalPoint.y).arg(globalPoint.x)
+        }
+    }
+
     //! [settings]
     ScrollView {
         id: settingsPane
@@ -493,6 +526,12 @@ ApplicationWindow {
             CheckBox {
                 id: drawBoundingBox
                 text: qsTr("Draw Bounding Box")
+                checked: true
+            }
+
+            CheckBox {
+                id: drawCursor
+                text: qsTr("Draw Cursor Lines")
                 checked: true
             }
 
@@ -676,20 +715,54 @@ ApplicationWindow {
                 onClicked: fileDialog.open()
             }
 
-            Button {
-                text: qsTr("Load Scroll 1...")
-                onClicked: {
-                        volumeTextureData.loadAsync("https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr", 128,
-                                                    128, 128, "uint8")
-                        spinner.running = true
+            Label {
+                text: qsTr("Focus point (z, y, x):")
+            }
+
+            Row {
+                spacing: 5
+                TextField {
+                    id: pointZ
+                    text: "10835"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
+                }
+                TextField {
+                    id: pointY
+                    text: "2602"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
+                }
+                TextField {
+                    id: pointX
+                    text: "2712"
+                    validator: IntValidator {
+                        bottom: 0
+                        top: 999999
+                    }
                 }
             }
 
+            ComboBox {
+                id: scrollCombo
+                model: [qsTr("Scroll1A"), qsTr("Scroll5")]
+            }
+
             Button {
-                text: qsTr("Load Scroll 5...")
+                text: qsTr("Load Scroll...")
                 onClicked: {
-                        volumeTextureData.loadAsync("https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/", 128,
-                                                    128, 128, "uint8")
+                        var url = ""
+                        if (scrollCombo.currentText == "Scroll1A") {
+                            url = "https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr"
+                        } else if (scrollCombo.currentText == "Scroll5") {
+                            url = "https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/"
+                        }
+                        var point = Qt.vector3d(parseInt(pointX.text), parseInt(pointY.text), parseInt(pointZ.text))
+                        volumeTextureData.loadAsync(url, 128, 128, 128, "uint8", point)
                         spinner.running = true
                 }
             }

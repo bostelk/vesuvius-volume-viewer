@@ -199,7 +199,7 @@ static QByteArray decompressZarrChunk(QByteArray data, int depth, int width, int
     int err = blosc2_decompress(data.constData(), data.size(), decompressed_data, decompressed_size_bytes);
     if (err < 0) {
         free(decompressed_data);
-        qWarning() << "Blosc2 Decompression error. Error code: " << err;
+        qWarning() << "Blosc2 Decompression error. Error code:" << err;
         return QByteArray();
     }
 
@@ -221,9 +221,68 @@ static QUrl getZarrChunkUrl(const QUrl zarrUrl, int level, int z, int y, int x) 
     return zarrChunkURL;
 }
 
+static std::tuple<int, int, int> getNearestZarrChunk(std::tuple<int, int, int> size, std::tuple<int, int, int> point) // z, y, x
+{
+    int z = std::get<0>(point) / std::get<0>(size);
+    int y = std::get<1>(point) / std::get<1>(size);
+    int x = std::get<2>(point) / std::get<2>(size);
+    return std::make_tuple(z, y, x);
+}
+
+static std::tuple<float, float, float> getNearestZarrChunkRemainder(std::tuple<int, int, int> size, std::tuple<int, int, int> point) // z, y, x
+{
+    float z = std::get<0>(point) / (float)std::get<0>(size);
+    z = z - std::floor(z);
+    float y = std::get<1>(point) / (float)std::get<1>(size);
+    y = y - std::floor(y);
+    float x = std::get<2>(point) / (float)std::get<2>(size);
+    x = x - std::floor(x);
+    return std::make_tuple(z, y, x);
+}
+
+static QByteArray fetchResourceBlocking(QUrl resourceUrl)
+{
+    qDebug() << "Fetch:" << resourceUrl;
+
+    QNetworkRequest netRequest(resourceUrl);
+    QNetworkAccessManager* manager = new QNetworkAccessManager();
+
+    // Create an event loop to block until the request finishes
+    QEventLoop loop;
+
+    // Connect the finished signal to quit the event loop
+    QObject::connect(manager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit);
+
+    // Make the request
+    QNetworkReply* reply = manager->get(netRequest);
+
+    // Enter the event loop and block until the request is finished
+    loop.exec();
+
+    // Once finished, handle the reply
+    if (reply->error() == QNetworkReply::NoError) {
+        // Success: process the reply data
+        QByteArray data = reply->readAll();
+        qDebug() << "Reply data:" << data.size();
+        return data;
+    }
+    else {
+        // Error handling
+        qDebug() << "Error:" << reply->errorString();
+    }
+
+    // Clean up the reply
+    reply->deleteLater();
+
+    return QByteArray(); // Empty.
+}
+
 static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
+
+    QVector3D globalFocusPoint = input.globalFocusPoint; // Point to center the cursor on in global scroll coorindates.
+    QVector3D localFocusPoint; // Point to center the cursor on in local box coordinates.
 
     if (input.source == QUrl("file:///default_helix")) {
         imageDataSource = createBuiltinVolume(ExampleId::Helix);
@@ -232,38 +291,19 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
     } else if (input.source == QUrl("file:///default_colormap")) {
         imageDataSource = createBuiltinVolume(ExampleId::Colormap);
     } else if (input.source.scheme() == "http" || input.source.scheme() == "https") {
-        QUrl zarrChunkURL = getZarrChunkUrl(input.source, 0, 84, 26, 19);
-        qDebug() << "Fetch: " << zarrChunkURL;
+        const auto chunkPoint = std::make_tuple(globalFocusPoint.z(), globalFocusPoint.y(), globalFocusPoint.x()); // PI letter (z, y, x).
+        const auto chunkShape = std::make_tuple(128, 128, 128);
+        const auto [chunkZ, chunkY, chunkX] = getNearestZarrChunk(chunkShape, chunkPoint);
+        const auto [remZ, remY, remX] = getNearestZarrChunkRemainder(chunkShape, chunkPoint);
 
-        QNetworkRequest netRequest(zarrChunkURL);
-        QNetworkAccessManager* manager = new QNetworkAccessManager();
+        float boxSize = 50;
+        localFocusPoint = 2 * boxSize * QVector3D(remX, remY, remZ) - QVector3D(boxSize, boxSize, boxSize);
 
-        // Create an event loop to block until the request finishes
-        QEventLoop loop;
-
-        // Connect the finished signal to quit the event loop
-        QObject::connect(manager, &QNetworkAccessManager::finished, &loop, &QEventLoop::quit);
-
-        // Make the request
-        QNetworkReply* reply = manager->get(netRequest);
-
-        // Enter the event loop and block until the request is finished
-        loop.exec();
-
-        // Once finished, handle the reply
-        if (reply->error() == QNetworkReply::NoError) {
-            // Success: process the reply data
-            QByteArray data = reply->readAll();
+        QUrl zarrChunkURL = getZarrChunkUrl(input.source, 0, chunkZ, chunkY, chunkX);
+        QByteArray data = fetchResourceBlocking(zarrChunkURL);
+        if (!data.isEmpty()) {
             imageDataSource = decompressZarrChunk(data, input.depth, input.width, input.height);
-            qDebug() << "Reply data:" << data.size();
         }
-        else {
-            // Error handling
-            qDebug() << "Error:" << reply->errorString();
-        }
-
-        // Clean up the reply
-        reply->deleteLater();
     } else {
         // NOTE: we always assume a local file is opened
         QFile file(input.source.toLocalFile());
@@ -305,6 +345,8 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
 
     auto result = input;
     result.volumeData = imageData;
+    result.globalFocusPoint = globalFocusPoint;
+    result.localFocusPoint = localFocusPoint;
     result.success = true;
     return result;
 }
@@ -437,13 +479,14 @@ void VolumeTextureData::updateTextureDimensions()
     QQuick3DTextureData::setDepth(m_depth);
 }
 
-void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType)
+void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint)
 {
     loaderData.source = source;
     loaderData.width = width;
     loaderData.height = height;
     loaderData.depth = depth;
     loaderData.dataType = dataType;
+    loaderData.globalFocusPoint = globalFocusPoint;
 
     if (m_isLoading) {
         m_isAborting = true;
@@ -476,7 +519,7 @@ void VolumeTextureData::handleResults(AsyncLoaderData result)
     }
 
     if (!result.success) {
-        emit loadFailed(result.source, result.width, result.height, result.depth, result.dataType);
+        emit loadFailed(result.source, result.width, result.height, result.depth, result.dataType, result.localFocusPoint, result.globalFocusPoint);
     }
 
     m_currentDataSize = result.volumeData.size();
@@ -493,7 +536,7 @@ void VolumeTextureData::handleResults(AsyncLoaderData result)
     setDataType(result.dataType);
     setSource(result.source);
 
-    emit loadSucceeded(result.source, result.width, result.height, result.depth, result.dataType);
+    emit loadSucceeded(result.source, result.width, result.height, result.depth, result.dataType, result.localFocusPoint, result.globalFocusPoint);
     m_isLoading = false;
 }
 

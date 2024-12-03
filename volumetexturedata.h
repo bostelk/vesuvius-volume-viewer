@@ -31,6 +31,8 @@ public:
         qsizetype depth = 0;
         QString dataType;
         QByteArray volumeData = {};
+        QVector3D localFocusPoint = {};
+        QVector3D globalFocusPoint = {};
         bool success = false;
     };
 
@@ -58,7 +60,7 @@ public:
     QString dataType() const;
     void setDataType(const QString &newDataType);
 
-    Q_INVOKABLE void loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType);
+    Q_INVOKABLE void loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint=QVector3D(0,0,0));
 
 signals:
     void sourceChanged();
@@ -66,8 +68,8 @@ signals:
     void heightChanged();
     void depthChanged();
     void dataTypeChanged();
-    void loadSucceeded(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType);
-    void loadFailed(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType);
+    void loadSucceeded(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D localFocusPoint, QVector3D globalFocusPoint);
+    void loadFailed(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D localFocusPoint, QVector3D globalFocusPoint);
 
 private:
     void handleResults(VolumeTextureData::AsyncLoaderData result);

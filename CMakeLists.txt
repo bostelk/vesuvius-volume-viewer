@@ -16,6 +16,8 @@ qt_add_executable(volumeraycaster
     volumetexturedata.h
     lineboxgeometry.cpp
     lineboxgeometry.h
+    linecrossgeometry.cpp
+    linecrossgeometry.h
 )
 
 set_target_properties(volumeraycaster PROPERTIES
