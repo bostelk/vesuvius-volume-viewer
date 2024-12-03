@@ -139,6 +139,10 @@ ApplicationWindow {
             spinner.running = false
 
             cursorModel.setPosition(localFocusPoint)
+            zPlaneModel.setPosition(localFocusPoint)
+            xPlaneModel.setPosition(localFocusPoint)
+            yPlaneModel.setPosition(localFocusPoint)
+
             infoLabel.setPosition(localFocusPoint, globalFocusPoint)
         }
         function onLoadFailed(source, width, height, depth, dataType) {
@@ -149,8 +153,9 @@ ApplicationWindow {
     View3D {
         id: view
 
-        x: settingsPane.x + settingsPane.width
-        width: parent.width - x
+        // Shrink boundaries to not interfere with mouse events.
+        x: Math.max(iconOpenSettings.x + iconOpenSettings.width, iconOpenVolumes.x + iconOpenVolumes.width)
+        width: parent.width - x - originGizmo.width
         height: parent.height
 
         camera: cameraNode
@@ -270,8 +275,113 @@ ApplicationWindow {
             //! [bounding-boxes]
 
             Model {
+                id: zPlaneModel
+                scale: Qt.vector3d(50, 50, 50)
+                geometry: GridGeometry {
+                    horizontalLines: 20
+                    verticalLines: 20
+                }
+                visible: isVisible()
+                pickable: isVisible()
+                materials: PrincipledMaterial {
+                    baseColor: "#268bd2"
+                    lighting: PrincipledMaterial.NoLighting
+                    cullMode: Material.NoCulling
+                }
+                receivesShadows: false
+                castsShadows: false
+                property string displayName: "zPlane"
+
+                function setPosition(point) {
+                    x = 0
+                    y = 0
+                    z = point.z
+                }
+
+                function isVisible() {
+                    if (!drawXYZGrid.checked) {
+                        return false
+                    }
+                    var rot0 = originGizmo.quaternionForAxis(OriginGizmo.Axis.PositiveZ, cubeModel.rotation)
+                    var rot1 = originGizmo.quaternionForAxis(OriginGizmo.Axis.NegativeZ, cubeModel.rotation)
+                    return cubeModel.rotation.fuzzyEquals(rot0) || cubeModel.rotation.fuzzyEquals(rot1)
+                }
+            }
+
+            Model {
+                id: yPlaneModel
+                scale: Qt.vector3d(50, 50, 50)
+                geometry: GridGeometry {
+                    horizontalLines: 20
+                    verticalLines: 20
+                }
+                visible: isVisible()
+                pickable: isVisible()
+                materials: PrincipledMaterial {
+                    baseColor: "#859900"
+                    lighting: PrincipledMaterial.NoLighting
+                    cullMode: Material.NoCulling
+                }
+                receivesShadows: false
+                castsShadows: false
+                eulerRotation: Qt.vector3d(90, 0, 0)
+                property string displayName: "yPlane"
+
+                function setPosition(point) {
+                    x = 0
+                    y = point.y
+                    z = 0
+                }
+
+                function isVisible() {
+                    if (!drawXYZGrid.checked) {
+                        return false
+                    }
+                    var rot0 = originGizmo.quaternionForAxis(OriginGizmo.Axis.PositiveY, cubeModel.rotation)
+                    var rot1 = originGizmo.quaternionForAxis(OriginGizmo.Axis.NegativeY, cubeModel.rotation)
+                    return cubeModel.rotation.fuzzyEquals(rot0) || cubeModel.rotation.fuzzyEquals(rot1)
+                }
+            }
+
+            Model {
+                id: xPlaneModel
+                scale: Qt.vector3d(50, 50, 50)
+                geometry: GridGeometry {
+                    horizontalLines: 20
+                    verticalLines: 20
+                }
+                visible: isVisible()
+                pickable: isVisible()
+                materials: PrincipledMaterial {
+                    baseColor: "#dc322f"
+                    lighting: PrincipledMaterial.NoLighting
+                    cullMode: Material.NoCulling
+                }
+                receivesShadows: false
+                castsShadows: false
+                eulerRotation: Qt.vector3d(0, 90, 0)
+                property string displayName: "xPlane"
+
+                function setPosition(point) {
+                    x = point.x
+                    y = 0
+                    z = 0
+                }
+
+                function isVisible() {
+                    if (!drawXYZGrid.checked) {
+                        return false
+                    }
+                    var rot0 = originGizmo.quaternionForAxis(OriginGizmo.Axis.PositiveX, cubeModel.rotation)
+                    var rot1 = originGizmo.quaternionForAxis(OriginGizmo.Axis.NegativeX, cubeModel.rotation)
+                    return cubeModel.rotation.fuzzyEquals(rot0) || cubeModel.rotation.fuzzyEquals(rot1)
+                }
+            }
+
+            Model {
                 id: cursorModel
                 visible: drawCursor.checked
+                property vector3d centroid: Qt.vector3d(0,0,0)
                 geometry: LineCrossGeometry {
                     size: 100.0
                 }
@@ -282,8 +392,9 @@ ApplicationWindow {
                 receivesShadows: false
                 castsShadows: false
 
-                function setPosition(localPoint) {
-                    geometry.center = localPoint
+                function setPosition(point) {
+                    centroid = point
+                    geometry.center = point
                 }
             }
         }
@@ -372,7 +483,9 @@ ApplicationWindow {
                                 arcballController.jumpToRotation(rotation)
                             } else if (event.key === Qt.Key_S) {
                                 settingsPane.toggleHide()
-                            } else if (event.key === Qt.Key_Left
+                            } else if (event.key === Qt.Key_V) {
+                                volumesPane.toggleHide()
+                            }  else if (event.key === Qt.Key_Left
                                        || event.key === Qt.Key_A) {
                                 let rotation = originGizmo.quaternionRotateLeft(
                                     arcballController.controlledObject.rotation)
@@ -403,7 +516,7 @@ ApplicationWindow {
     //! [origingizmo]
 
     RoundButton {
-        id: iconOpenScrolls
+        id: iconOpenVolumes
         text: "\u222D" // Unicode Character 'TRIPPLE INTEGRAL', no qsTr()
         x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
         y: 10
@@ -414,7 +527,7 @@ ApplicationWindow {
         id: iconOpenSettings
         text: "\u2699" // Unicode Character 'GEAR', no qsTr()
         x: Math.max(settingsPane.x + settingsPane.width + 10, volumesPane.x + volumesPane.width + 10)
-        y: iconOpenScrolls.y + iconOpenScrolls.height + 10
+        y: iconOpenVolumes.y + iconOpenVolumes.height + 10
         onClicked: settingsPane.toggleHide()
     }
 
@@ -573,7 +686,7 @@ ApplicationWindow {
             }
 
             Button {
-                text: qsTr("Load Volume...")
+                text: qsTr("Open file...")
                 onClicked: fileDialog.open()
             }
         }
@@ -685,6 +798,12 @@ ApplicationWindow {
             CheckBox {
                 id: drawCursor
                 text: qsTr("Draw Cursor Lines")
+                checked: true
+            }
+
+            CheckBox {
+                id: drawXYZGrid
+                text: qsTr("Draw XYZ-Grids")
                 checked: true
             }
 
@@ -830,4 +949,17 @@ ApplicationWindow {
         }
     }
     //! [settings]
+
+    MouseArea {
+        anchors.fill: view
+        onClicked: (mouse) => {
+            var result = view.pick(mouse.x, mouse.y)
+            if (result.objectHit) {
+                var pickedObject = result.objectHit
+                var distance = result.scenePosition.minus(cursorModel.centroid).length()
+                console.log("Picked: " + pickedObject.name)
+                console.log("Distance: " + distance)
+            }
+        }
+    }
 }
