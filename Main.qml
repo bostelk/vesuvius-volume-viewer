@@ -673,22 +673,37 @@ ApplicationWindow {
 
             ComboBox {
                 id: scrollCombo
-                model: [qsTr("Scroll1A"), qsTr("Scroll5"), qsTr("Scroll1A - Fiber")]
+                model: [qsTr("Scroll1A"), qsTr("Scroll5"), qsTr("Scroll1A - Fiber"), qsTr("Scroll1A - Ink"), qsTr("Scroll1A - Boundary")]
             }
 
             Button {
                 text: qsTr("Load Volume...")
                 onClicked: {
                         var url = ""
+                        var chunkSize = 128
+                        var chunkSeparator = '/'
+                        var level = -1 // unused.
+                        var order = 0
                         if (scrollCombo.currentText == "Scroll1A") {
                             url = "https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr"
+                            level = 0
                         } else if (scrollCombo.currentText == "Scroll5") {
                             url = "https://dl.ash2txt.org/full-scrolls/Scroll5/PHerc172.volpkg/volumes_zarr_standardized/53keV_7.91um_Scroll5.zarr/"
+                            level = 0
                         } else if (scrollCombo.currentText == "Scroll1A - Fiber") {
                             url = "https://dl.ash2txt.org/community-uploads/bruniss/Fiber-and-Surface-Models/Predictions/s1/mask-2ext-surface_erode_evenmore_ome.zarr/"
+                            level = 0
+                        } else if (scrollCombo.currentText == "Scroll1A - Boundary") {
+                            url = "https://dl.ash2txt.org/other/dev/meshes/boundaries.zarr/"
+                            chunkSeparator = '.'
+                        } else if (scrollCombo.currentText == "Scroll1A - Ink") {
+                            url = "https://dl.ash2txt.org/community-uploads/ryan/3d_predictions_scroll1.zarr/"
+                            chunkSize = 256
+                            chunkSeparator = '.'
+                            order = 1
                         }
                         var point = Qt.vector3d(parseInt(pointX.text), parseInt(pointY.text), parseInt(pointZ.text))
-                        volumeTextureData.loadAsync(url, 128, 128, 128, "uint8", point)
+                        volumeTextureData.loadAsync(url, chunkSize, chunkSize, chunkSize, "uint8", point, chunkSeparator, level, order)
                         spinner.running = true
                 }
             }

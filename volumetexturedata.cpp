@@ -209,13 +209,20 @@ static QByteArray decompressZarrChunk(QByteArray data, int depth, int width, int
     return newData;
 }
 
-static QUrl getZarrChunkUrl(const QUrl zarrUrl, int level, int z, int y, int x) {
-    QString levelPath = QString("/%1").arg(level);
-    QString chunkResourcePath = QString("/%1/%2/%3")
-        .arg(z)
-        .arg(y)
-        .arg(x);
-    QString combinedPath = zarrUrl.path() + levelPath + chunkResourcePath;
+static QUrl getZarrChunkUrl(const QUrl zarrUrl, int level, int z, int y, int x, char chunkSeparator = '/', int order = 0) {
+    QStringList coordinates;
+    if (order == 0) {
+        coordinates << QString::number(z) << QString::number(y) << QString::number(x);
+    } else if (order == 1) {
+        coordinates << QString::number(y) << QString::number(x) << QString::number(z);
+    }
+    QString chunkResourcePath = "/" + coordinates.join(chunkSeparator);
+    QString combinedPath = zarrUrl.path();
+    if (level >= 0) {
+        QString levelPath = QString("/%1").arg(level);
+        combinedPath += levelPath;
+    } 
+    combinedPath += chunkResourcePath;
     QUrl combinedPathUrl(combinedPath);
     QUrl zarrChunkURL = zarrUrl.resolved(combinedPathUrl);
     return zarrChunkURL;
@@ -292,14 +299,14 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
         imageDataSource = createBuiltinVolume(ExampleId::Colormap);
     } else if (input.source.scheme() == "http" || input.source.scheme() == "https") {
         const auto chunkPoint = std::make_tuple(globalFocusPoint.z(), globalFocusPoint.y(), globalFocusPoint.x()); // PI letter (z, y, x).
-        const auto chunkShape = std::make_tuple(128, 128, 128);
+        const auto chunkShape = std::make_tuple(input.depth, input.width, input.height);
         const auto [chunkZ, chunkY, chunkX] = getNearestZarrChunk(chunkShape, chunkPoint);
         const auto [remZ, remY, remX] = getNearestZarrChunkRemainder(chunkShape, chunkPoint);
 
         float boxSize = 50;
         localFocusPoint = 2 * boxSize * QVector3D(remX, remY, remZ) - QVector3D(boxSize, boxSize, boxSize);
 
-        QUrl zarrChunkURL = getZarrChunkUrl(input.source, 0, chunkZ, chunkY, chunkX);
+        QUrl zarrChunkURL = getZarrChunkUrl(input.source, input.level, chunkZ, chunkY, chunkX, input.chunkSeparator, input.order);
         QByteArray data = fetchResourceBlocking(zarrChunkURL);
         if (!data.isEmpty()) {
             imageDataSource = decompressZarrChunk(data, input.depth, input.width, input.height);
@@ -479,7 +486,7 @@ void VolumeTextureData::updateTextureDimensions()
     QQuick3DTextureData::setDepth(m_depth);
 }
 
-void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint)
+void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint, QString chunkSeparator, int level, int order)
 {
     loaderData.source = source;
     loaderData.width = width;
@@ -487,6 +494,9 @@ void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height
     loaderData.depth = depth;
     loaderData.dataType = dataType;
     loaderData.globalFocusPoint = globalFocusPoint;
+    loaderData.chunkSeparator = chunkSeparator[0].toLatin1();
+    loaderData.level = level;
+    loaderData.order = order;
 
     if (m_isLoading) {
         m_isAborting = true;
