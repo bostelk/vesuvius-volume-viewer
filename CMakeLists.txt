@@ -28,12 +28,35 @@ set_target_properties(volumeraycaster PROPERTIES
 pkg_check_modules(BLOSC2 REQUIRED blosc2)
 include_directories(${BLOSC2_INCLUDE_DIRS})
 
+find_path(TEEM_INCLUDE_DIR NAMES nrrd.h
+    HINTS {CMAKE_INSTALL_PREFIX}
+    PATH_SUFFIXES include include/teem
+)
+find_library(TEEM_LIBRARY NAMES teem
+    HINTS {CMAKE_INSTALL_PREFIX}
+    PATH_SUFFIXES lib
+)
+include_directories(${TEEM_INCLUDE_DIR})
+
+pkg_check_modules(ZLIB REQUIRED zlib) # <-- TEEM dep
+
+find_library(BZIP2_LIBRARY NAMES libbz2 # <-- TEEM dep
+    HINTS {CMAKE_INSTALL_PREFIX}
+    PATH_SUFFIXES lib lib/x86_64-linux-gnu
+)
+
+find_package(PNG 1.6) # <-- TEEM dep
+
 target_link_libraries(volumeraycaster PUBLIC
     Qt::Core
     Qt::Gui
     Qt::Quick
     Qt::Quick3D
     ${BLOSC2_LIBRARIES}
+    ${TEEM_LIBRARY}
+    ${ZLIB_LIBRARIES}
+    ${BZIP2_LIBRARY}
+    ${PNG_LIBRARIES}
 )
 
 if(OpenMP_CXX_FOUND AND NOT ANDROID)

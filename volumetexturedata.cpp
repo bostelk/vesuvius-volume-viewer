@@ -15,6 +15,7 @@
 #include <QNetworkAccessManager>
 
 #include <blosc2.h> //Zarr volume.
+#include <nrrd.h> 
 
 QT_BEGIN_NAMESPACE
 
@@ -284,6 +285,57 @@ static QByteArray fetchResourceBlocking(QUrl resourceUrl)
     return QByteArray(); // Empty.
 }
 
+QByteArray loadNrrdFromByteArray(QByteArray data) {
+    // Create a memory stream from the byte array
+    FILE* stream = fmemopen(const_cast<char*>(data.constData()), data.size(), "r");
+    if (!stream) {
+        qWarning() << "Failed to open memory stream.";
+        return QByteArray(); // Empty.
+    }
+
+    NrrdIoState* nio = nrrdIoStateNew();
+
+    // Create a Nrrd object to hold the data
+    Nrrd* nrrd = nrrdNew();
+    if (nrrdRead(nrrd, stream, nio)) {
+        qWarning() << "Error loading NRRD from memory.";
+        nrrdNuke(nrrd);
+        nio = nrrdIoStateNix(nio);
+        fclose(stream);
+        return QByteArray(); // Empty.
+    }
+
+    nio = nrrdIoStateNix(nio);
+
+    // Optionally print out the header info for debugging
+    //char* header = nrrdContent(nrrd);
+    //std::cout << "NRRD Header: " << std::endl << header << std::endl;
+
+    qDebug() << "element size:" << QString::number(nrrdElementSize(nrrd));
+
+    uint8_t maxVal = 0;
+    for (size_t i = 0; i < nrrdElementNumber(nrrd); i++) {
+        uint8_t value = ((uint8_t*)nrrd->data)[i];
+        if (value > maxVal) {
+            maxVal = value;
+        }
+    }
+
+    qDebug() << "max value:" << QString::number(maxVal);
+
+
+    // Access the raw data
+    size_t dataSizeBytes = nrrdElementNumber(nrrd) * nrrdElementSize(nrrd);
+    QByteArray newData((const char*)nrrd->data, dataSizeBytes);
+
+    // Perform any processing with the data here
+
+    // Clean up
+    nrrdNuke(nrrd);
+    fclose(stream);
+    return newData;
+}
+
 static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
@@ -322,6 +374,8 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
         }
 
         imageDataSource = file.readAll();
+        imageDataSource = loadNrrdFromByteArray(imageDataSource);
+
         file.close();
     }
 
