@@ -174,8 +174,8 @@ ApplicationWindow {
             visible: true
             materials: CustomMaterial {
                 shadingMode: CustomMaterial.Unshaded
-                vertexShader: "alpha_blending.vert"
-                fragmentShader: "alpha_blending.frag"
+                vertexShader: "shaders/alpha_blending.vert"
+                fragmentShader: "shaders/alpha_blending.frag"
 
                 //! [volume-texture]
                 property TextureInput volume: TextureInput {
