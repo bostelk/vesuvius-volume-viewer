@@ -11,13 +11,13 @@ list(APPEND CMAKE_PREFIX_PATH "/opt/Qt/6.8.0/gcc_64/lib/cmake")
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick Quick3D)
 
 qt_add_executable(volumeraycaster
-    main.cpp
-    volumetexturedata.cpp
-    volumetexturedata.h
-    lineboxgeometry.cpp
-    lineboxgeometry.h
-    linecrossgeometry.cpp
-    linecrossgeometry.h
+    src/main.cpp
+    src/volumetexturedata.cpp
+    src/volumetexturedata.h
+    src/lineboxgeometry.cpp
+    src/lineboxgeometry.h
+    src/linecrossgeometry.cpp
+    src/linecrossgeometry.h
     src/storagezarr.cpp
     src/storagezarr.h
 )

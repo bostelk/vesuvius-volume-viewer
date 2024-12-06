@@ -8,14 +8,14 @@ target.path = $$[QT_INSTALL_EXAMPLES]/quick3d/volumeraycaster
 INSTALLS += target
 
 SOURCES += \
-    main.cpp \
-    lineboxgeometry.cpp \
-    volumetexturedata.cpp
+    src/main.cpp \
+    src/lineboxgeometry.cpp \
+    src/volumetexturedata.cpp
     src/volumezarr.cpp
 
 HEADERS += \
-    lineboxgeometry.h \
-    volumetexturedata.h
+    src/lineboxgeometry.h \
+    src/volumetexturedata.h
     src/volumezarr.h
 
 qml_resources.files = \
