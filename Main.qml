@@ -48,21 +48,6 @@ ApplicationWindow {
             depth = parseInt(matches[3])
             dataSize = matches[4]
         }
-        else if (false) // 00000_02408_04560_volume.nrrd
-        {
-            width = 256
-            height = 256
-            depth = 256
-            dataSize = "uint16"
-        }
-        else if (true) // 00000_02408_04560_mask.nrrd
-        {
-            width = 256
-            height = 256
-            depth = 256
-            dataSize = "uint8"
-        }
-
 
         let dimensions = Qt.vector3d(width, height, depth).normalized()
         var spacing = SpacingMap.get(String(selectedFile)).times(dimensions)

@@ -231,57 +231,6 @@ static QByteArray fetchResourceBlocking(QUrl resourceUrl)
     return QByteArray(); // Empty.
 }
 
-QByteArray loadNrrdFromByteArray(QByteArray data) {
-    // Create a memory stream from the byte array
-    FILE* stream = fmemopen(const_cast<char*>(data.constData()), data.size(), "r");
-    if (!stream) {
-        qWarning() << "Failed to open memory stream.";
-        return QByteArray(); // Empty.
-    }
-
-    NrrdIoState* nio = nrrdIoStateNew();
-
-    // Create a Nrrd object to hold the data
-    Nrrd* nrrd = nrrdNew();
-    if (nrrdRead(nrrd, stream, nio)) {
-        qWarning() << "Error loading NRRD from memory.";
-        nrrdNuke(nrrd);
-        nio = nrrdIoStateNix(nio);
-        fclose(stream);
-        return QByteArray(); // Empty.
-    }
-
-    nio = nrrdIoStateNix(nio);
-
-    // Optionally print out the header info for debugging
-    //char* header = nrrdContent(nrrd);
-    //std::cout << "NRRD Header: " << std::endl << header << std::endl;
-
-    qDebug() << "element size:" << QString::number(nrrdElementSize(nrrd));
-
-    uint8_t maxVal = 0;
-    for (size_t i = 0; i < nrrdElementNumber(nrrd); i++) {
-        uint8_t value = ((uint8_t*)nrrd->data)[i];
-        if (value > maxVal) {
-            maxVal = value;
-        }
-    }
-
-    qDebug() << "max value:" << QString::number(maxVal);
-
-
-    // Access the raw data
-    size_t dataSizeBytes = nrrdElementNumber(nrrd) * nrrdElementSize(nrrd);
-    QByteArray newData((const char*)nrrd->data, dataSizeBytes);
-
-    // Perform any processing with the data here
-
-    // Clean up
-    nrrdNuke(nrrd);
-    fclose(stream);
-    return newData;
-}
-
 static VolumeTextureData::AsyncLoaderData loadVolumeZarr(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
@@ -341,6 +290,90 @@ static VolumeTextureData::AsyncLoaderData loadVolumeZarr(const VolumeTextureData
     return result;
 }
 
+static VolumeTextureData::AsyncLoaderData loadVolumeNrrd(const VolumeTextureData::AsyncLoaderData& input)
+{
+    QByteArray data;
+
+    // NOTE: we always assume a local file is opened
+    QFile file(input.source.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Could not open file: " << file.fileName();
+        auto result = input;
+        result.success = false;
+        return result;
+    }
+
+    data = file.readAll();
+
+    // Create a memory stream from the byte array
+    FILE* stream = fmemopen(const_cast<char*>(data.constData()), data.size(), "r");
+    if (!stream) {
+        qWarning() << "Failed to open memory stream.";
+        return input; // Empty.
+    }
+
+    NrrdIoState* nio = nrrdIoStateNew();
+
+    // Create a Nrrd object to hold the data
+    Nrrd* nrrd = nrrdNew();
+    if (nrrdRead(nrrd, stream, nio)) {
+        qWarning() << "Error loading NRRD from memory.";
+        nrrdNuke(nrrd);
+        nio = nrrdIoStateNix(nio);
+        fclose(stream);
+        return input; // Empty.
+    }
+
+    nio = nrrdIoStateNix(nio);
+
+    // Optionally print out the header info for debugging
+    //char* header = nrrdContent(nrrd);
+    //std::cout << "NRRD Header: " << std::endl << header << std::endl;
+
+    qDebug() << "element size:" << QString::number(nrrdElementSize(nrrd));
+    
+    QString newDataType;
+    if (nrrdElementSize(nrrd) == 1) {
+        newDataType = "uint8";
+    }
+    else if (nrrdElementSize(nrrd) == 2) {
+        newDataType = "uint16";
+    }
+
+    uint8_t maxVal = 0;
+    for (size_t i = 0; i < nrrdElementNumber(nrrd); i++) {
+        uint8_t value = ((uint8_t*)nrrd->data)[i];
+        if (value > maxVal) {
+            maxVal = value;
+        }
+    }
+
+    qDebug() << "max value:" << QString::number(maxVal);
+
+    // Access the raw data
+    size_t dataSizeBytes = nrrdElementNumber(nrrd) * nrrdElementSize(nrrd);
+    QByteArray newData((const char*)nrrd->data, dataSizeBytes);
+
+    // Perform any processing with the data here
+
+    // Clean up
+    nrrdNuke(nrrd);
+    fclose(stream);
+
+    file.close();
+
+    qDebug() << nrrd->dim;
+
+    auto result = input;
+    result.volumeData = newData;
+    result.dataType = newDataType;
+    result.success = true;
+    result.depth = 256; // Todo: Read header.
+    result.height = 256; // Todo: Read header.
+    result.width = 256; // Todo: Read header.
+    return result;
+}
+
 static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
@@ -375,19 +408,32 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
             qWarning() << "Failed to load Zarr volume:" << input.source;
         }
     } else {
-        // NOTE: we always assume a local file is opened
-        QFile file(input.source.toLocalFile());
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Could not open file: " << file.fileName();
-            auto result = input;
-            result.success = false;
-            return result;
+        auto result = loadVolumeNrrd(input);
+        if (result.success) {
+            imageDataSource = result.volumeData;
+            dataType = result.dataType;
+            depth = result.depth;
+            height = result.height;
+            width = result.width;
+        }
+        else {
+            qWarning() << "Failed to load Nrrd volume:" << input.source;
         }
 
-        imageDataSource = file.readAll();
-        imageDataSource = loadNrrdFromByteArray(imageDataSource);
+        if (false)
+        {
+            // NOTE: we always assume a local file is opened
+            QFile file(input.source.toLocalFile());
+            if (!file.open(QIODevice::ReadOnly)) {
+                qWarning() << "Could not open file: " << file.fileName();
+                auto result = input;
+                result.success = false;
+                return result;
+            }
 
-        file.close();
+            imageDataSource = file.readAll();
+            file.close();
+        }
     }
 
     QByteArray imageData;
