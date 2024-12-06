@@ -53,7 +53,9 @@ jobs:
         arch: 'linux_gcc_64'
         modules: 'qtquick3d qtshadertools'
     - name: Install dependencies
-      run: sudo apt-get install -y libblosc2-dev libteem-dev libbz2-dev libpng-dev
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libblosc2-dev libteem-dev libbz2-dev libpng-dev
     - name: Set reusable strings
       # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
       id: strings
