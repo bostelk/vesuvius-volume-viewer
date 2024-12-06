@@ -27,6 +27,8 @@ set_target_properties(volumeraycaster PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
+include_directories(src)
+
 pkg_check_modules(BLOSC2 REQUIRED blosc2)
 include_directories(${BLOSC2_INCLUDE_DIRS})
 
