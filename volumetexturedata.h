@@ -33,9 +33,8 @@ public:
         QByteArray volumeData = {};
         QVector3D localFocusPoint = {};
         QVector3D globalFocusPoint = {};
-        char chunkSeparator = '/';
         int level = -1;
-        int order = 0;
+        QString order = "C";
         bool success = false;
     };
 
@@ -63,7 +62,7 @@ public:
     QString dataType() const;
     void setDataType(const QString &newDataType);
 
-    Q_INVOKABLE void loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint=QVector3D(0,0,0), QString chunkSeparator = "/", int level = -1, int order = 0);
+    Q_INVOKABLE void loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint=QVector3D(0,0,0), int level = -1, QString order = "C");
 
 signals:
     void sourceChanged();

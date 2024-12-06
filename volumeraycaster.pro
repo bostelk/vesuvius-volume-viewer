@@ -11,10 +11,12 @@ SOURCES += \
     main.cpp \
     lineboxgeometry.cpp \
     volumetexturedata.cpp
+    src/volumezarr.cpp
 
 HEADERS += \
     lineboxgeometry.h \
     volumetexturedata.h
+    src/volumezarr.h
 
 qml_resources.files = \
     qmldir \

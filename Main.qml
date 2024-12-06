@@ -42,12 +42,27 @@ ApplicationWindow {
         // boston_teapot_256x256x178_uint8.raw
         const re = new RegExp(".?([0-9]+)x([0-9]+)x([0-9]+)_([a-zA-Z0-9]+)\.raw")
         let matches = re.exec(String(selectedFile))
-        if (matches.length === 5) {
+        if (matches && matches.length === 5) {
             width = parseInt(matches[1])
             height = parseInt(matches[2])
             depth = parseInt(matches[3])
             dataSize = matches[4]
         }
+        else if (false) // 00000_02408_04560_volume.nrrd
+        {
+            width = 256
+            height = 256
+            depth = 256
+            dataSize = "uint16"
+        }
+        else if (true) // 00000_02408_04560_mask.nrrd
+        {
+            width = 256
+            height = 256
+            depth = 256
+            dataSize = "uint8"
+        }
+
 
         let dimensions = Qt.vector3d(width, height, depth).normalized()
         var spacing = SpacingMap.get(String(selectedFile)).times(dimensions)
@@ -680,10 +695,10 @@ ApplicationWindow {
                 text: qsTr("Load Volume...")
                 onClicked: {
                         var url = ""
-                        var chunkSize = 128
-                        var chunkSeparator = '/'
+                        var chunkSize = -1 // Read from Zarr metadata.
+                        var dataType = "" // Read from Zarr metadata.
                         var level = -1 // unused.
-                        var order = 0
+                        var order = "C"
                         if (scrollCombo.currentText == "Scroll1A") {
                             url = "https://dl.ash2txt.org/full-scrolls/Scroll1/PHercParis4.volpkg/volumes_zarr_standardized/54keV_7.91um_Scroll1A.zarr"
                             level = 0
@@ -695,15 +710,12 @@ ApplicationWindow {
                             level = 0
                         } else if (scrollCombo.currentText == "Scroll1A - Boundary") {
                             url = "https://dl.ash2txt.org/other/dev/meshes/boundaries.zarr/"
-                            chunkSeparator = '.'
                         } else if (scrollCombo.currentText == "Scroll1A - Ink") {
                             url = "https://dl.ash2txt.org/community-uploads/ryan/3d_predictions_scroll1.zarr/"
-                            chunkSize = 256
-                            chunkSeparator = '.'
-                            order = 1
+                            order = "yxz"
                         }
                         var point = Qt.vector3d(parseInt(pointX.text), parseInt(pointY.text), parseInt(pointZ.text))
-                        volumeTextureData.loadAsync(url, chunkSize, chunkSize, chunkSize, "uint8", point, chunkSeparator, level, order)
+                        volumeTextureData.loadAsync(url, chunkSize, chunkSize, chunkSize, dataType, point, level, order)
                         spinner.running = true
                 }
             }

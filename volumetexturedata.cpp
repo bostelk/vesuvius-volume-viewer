@@ -14,8 +14,11 @@
 #include <QNetworkReply>
 #include <QNetworkAccessManager>
 
-#include <blosc2.h> //Zarr volume.
-#include <nrrd.h> 
+#include <unordered_map>
+
+#include <nrrd.h>
+
+#include <src/storagezarr.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -191,63 +194,6 @@ static QByteArray createBuiltinVolume(int exampleId)
     return byteArray;
 }
 
-static QByteArray decompressZarrChunk(QByteArray data, int depth, int width, int height)
-{
-    qsizetype decompressed_size_bytes = depth * width * height;
-    unsigned char* decompressed_data = (unsigned char*)malloc(decompressed_size_bytes);
-
-    /* Decompress  */
-    int err = blosc2_decompress(data.constData(), data.size(), decompressed_data, decompressed_size_bytes);
-    if (err < 0) {
-        free(decompressed_data);
-        qWarning() << "Blosc2 Decompression error. Error code:" << err;
-        return QByteArray();
-    }
-
-    QByteArray newData((const char* )decompressed_data, decompressed_size_bytes);
-
-    free(decompressed_data);
-    return newData;
-}
-
-static QUrl getZarrChunkUrl(const QUrl zarrUrl, int level, int z, int y, int x, char chunkSeparator = '/', int order = 0) {
-    QStringList coordinates;
-    if (order == 0) {
-        coordinates << QString::number(z) << QString::number(y) << QString::number(x);
-    } else if (order == 1) {
-        coordinates << QString::number(y) << QString::number(x) << QString::number(z);
-    }
-    QString chunkResourcePath = "/" + coordinates.join(chunkSeparator);
-    QString combinedPath = zarrUrl.path();
-    if (level >= 0) {
-        QString levelPath = QString("/%1").arg(level);
-        combinedPath += levelPath;
-    } 
-    combinedPath += chunkResourcePath;
-    QUrl combinedPathUrl(combinedPath);
-    QUrl zarrChunkURL = zarrUrl.resolved(combinedPathUrl);
-    return zarrChunkURL;
-}
-
-static std::tuple<int, int, int> getNearestZarrChunk(std::tuple<int, int, int> size, std::tuple<int, int, int> point) // z, y, x
-{
-    int z = std::get<0>(point) / std::get<0>(size);
-    int y = std::get<1>(point) / std::get<1>(size);
-    int x = std::get<2>(point) / std::get<2>(size);
-    return std::make_tuple(z, y, x);
-}
-
-static std::tuple<float, float, float> getNearestZarrChunkRemainder(std::tuple<int, int, int> size, std::tuple<int, int, int> point) // z, y, x
-{
-    float z = std::get<0>(point) / (float)std::get<0>(size);
-    z = z - std::floor(z);
-    float y = std::get<1>(point) / (float)std::get<1>(size);
-    y = y - std::floor(y);
-    float x = std::get<2>(point) / (float)std::get<2>(size);
-    x = x - std::floor(x);
-    return std::make_tuple(z, y, x);
-}
-
 static QByteArray fetchResourceBlocking(QUrl resourceUrl)
 {
     qDebug() << "Fetch:" << resourceUrl;
@@ -336,12 +282,77 @@ QByteArray loadNrrdFromByteArray(QByteArray data) {
     return newData;
 }
 
+static VolumeTextureData::AsyncLoaderData loadVolumeZarr(const VolumeTextureData::AsyncLoaderData& input)
+{
+    QByteArray imageDataSource;
+
+    QVector3D globalFocusPoint = input.globalFocusPoint; // Point to center the cursor on in global scroll coorindates.
+    QVector3D localFocusPoint; // Point to center the cursor on in local box coordinates.
+
+    StorageZarr zarr(input.source);
+
+    QUrl metdataUrl = zarr.getMetadataUrl(input.level);
+    QByteArray jsonData = fetchResourceBlocking(metdataUrl);
+    if (!jsonData.isEmpty()) {
+        zarr.setMetadata(jsonData);
+    }
+
+    std::unordered_map<std::string, std::string> dataTypeMap = { // Use std::string because QString has no hash function.
+        { "|u1", "uint8" },
+        { "|u2", "uint16" },
+        { "|i2", "int16" },
+        { "|f4", "float32" },
+        { "|f8", "float64" },
+    };
+    std::string oldDataType = zarr.getDataType().toStdString();
+    QString newDataType;
+    if (dataTypeMap.count(oldDataType) != 0) {
+        newDataType = QString::fromStdString(dataTypeMap[oldDataType]);
+    }
+    else {
+        qWarning() << "Zarr data type is not understood:" << zarr.getDataType();
+    }
+
+    if (zarr.getOrder() != input.order) {
+        zarr.setOrder(input.order);
+        qDebug() << "Zarr dimension order changed to:" << input.order;
+    }
+
+    const auto focusPoint = std::make_tuple(globalFocusPoint.z(), globalFocusPoint.y(), globalFocusPoint.x()); // PI letter (z, y, x).
+    const auto [chunkZ, chunkY, chunkX] = zarr.getNearestChunk(focusPoint);
+    const auto [remZ, remY, remX] = zarr.getNearestChunkRemainder(focusPoint);
+
+    float boxSize = 50;
+    localFocusPoint = 2 * boxSize * QVector3D(remX, remY, remZ) - QVector3D(boxSize, boxSize, boxSize);
+
+    QUrl chunkUrl = zarr.getChunkUrl(input.level, chunkZ, chunkY, chunkX);
+    QByteArray data = fetchResourceBlocking(chunkUrl);
+    if (!data.isEmpty()) {
+        imageDataSource = zarr.readChunk(data);
+    }
+
+    auto result = input;
+    result.volumeData = imageDataSource;
+    result.globalFocusPoint = globalFocusPoint;
+    result.localFocusPoint = localFocusPoint;
+    result.dataType = newDataType;
+    result.success = true;
+    std::tie(result.depth, result.height, result.width) = zarr.getChunks();
+    return result;
+}
+
 static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::AsyncLoaderData& input)
 {
     QByteArray imageDataSource;
 
     QVector3D globalFocusPoint = input.globalFocusPoint; // Point to center the cursor on in global scroll coorindates.
     QVector3D localFocusPoint; // Point to center the cursor on in local box coordinates.
+
+    // Overwrite when not known ahead of time.
+    QString dataType = input.dataType;
+    int depth = input.depth;
+    int height = input.height;
+    int width = input.width;
 
     if (input.source == QUrl("file:///default_helix")) {
         imageDataSource = createBuiltinVolume(ExampleId::Helix);
@@ -350,18 +361,18 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
     } else if (input.source == QUrl("file:///default_colormap")) {
         imageDataSource = createBuiltinVolume(ExampleId::Colormap);
     } else if (input.source.scheme() == "http" || input.source.scheme() == "https") {
-        const auto chunkPoint = std::make_tuple(globalFocusPoint.z(), globalFocusPoint.y(), globalFocusPoint.x()); // PI letter (z, y, x).
-        const auto chunkShape = std::make_tuple(input.depth, input.width, input.height);
-        const auto [chunkZ, chunkY, chunkX] = getNearestZarrChunk(chunkShape, chunkPoint);
-        const auto [remZ, remY, remX] = getNearestZarrChunkRemainder(chunkShape, chunkPoint);
-
-        float boxSize = 50;
-        localFocusPoint = 2 * boxSize * QVector3D(remX, remY, remZ) - QVector3D(boxSize, boxSize, boxSize);
-
-        QUrl zarrChunkURL = getZarrChunkUrl(input.source, input.level, chunkZ, chunkY, chunkX, input.chunkSeparator, input.order);
-        QByteArray data = fetchResourceBlocking(zarrChunkURL);
-        if (!data.isEmpty()) {
-            imageDataSource = decompressZarrChunk(data, input.depth, input.width, input.height);
+        auto result = loadVolumeZarr(input);
+        if (result.success) { // Unpack on success.
+            imageDataSource = result.volumeData;
+            globalFocusPoint = result.globalFocusPoint;
+            localFocusPoint = result.localFocusPoint;
+            dataType = result.dataType;
+            depth = result.depth;
+            height = result.height;
+            width = result.width;
+        }
+        else {
+            qWarning() << "Failed to load Zarr volume:" << input.source;
         }
     } else {
         // NOTE: we always assume a local file is opened
@@ -382,15 +393,15 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
     QByteArray imageData;
 
     // We scale the values to uint8_t data size
-    if (input.dataType == "uint8") {
+    if (dataType == "uint8") {
         imageData = imageDataSource;
-    } else if (input.dataType == "uint16") {
+    } else if (dataType == "uint16") {
         convertData<uint16_t>(imageData, imageDataSource);
-    } else if (input.dataType == "int16") {
+    } else if (dataType == "int16") {
         convertData<int16_t>(imageData, imageDataSource);
-    } else if (input.dataType == "float32") {
+    } else if (dataType == "float32") {
         convertData<float>(imageData, imageDataSource);
-    } else if (input.dataType == "float64") {
+    } else if (dataType == "float64") {
         convertData<double>(imageData, imageDataSource);
     } else {
         qWarning() << "Unknown data type, assuming uint8";
@@ -399,7 +410,7 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
 
     // If our source data is smaller than expected we need to expand the texture
     // and fill with something
-    qsizetype dataSize = input.depth * input.width * input.height;
+    qsizetype dataSize = depth * width * height;
     if (imageData.size() < dataSize) {
         imageData.resize(dataSize, '0');
     }
@@ -409,6 +420,9 @@ static VolumeTextureData::AsyncLoaderData loadVolume(const VolumeTextureData::As
     result.globalFocusPoint = globalFocusPoint;
     result.localFocusPoint = localFocusPoint;
     result.success = true;
+    result.depth = depth;
+    result.height = height;
+    result.width = width;
     return result;
 }
 
@@ -540,7 +554,7 @@ void VolumeTextureData::updateTextureDimensions()
     QQuick3DTextureData::setDepth(m_depth);
 }
 
-void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint, QString chunkSeparator, int level, int order)
+void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height, qsizetype depth, QString dataType, QVector3D globalFocusPoint, int level, QString order)
 {
     loaderData.source = source;
     loaderData.width = width;
@@ -548,7 +562,6 @@ void VolumeTextureData::loadAsync(QUrl source, qsizetype width, qsizetype height
     loaderData.depth = depth;
     loaderData.dataType = dataType;
     loaderData.globalFocusPoint = globalFocusPoint;
-    loaderData.chunkSeparator = chunkSeparator[0].toLatin1();
     loaderData.level = level;
     loaderData.order = order;
 

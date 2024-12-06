@@ -18,6 +18,8 @@ qt_add_executable(volumeraycaster
     lineboxgeometry.h
     linecrossgeometry.cpp
     linecrossgeometry.h
+    src/storagezarr.cpp
+    src/storagezarr.h
 )
 
 set_target_properties(volumeraycaster PROPERTIES
