@@ -84,8 +84,8 @@ qt_add_qml_module(volumeraycaster
         images/colormap-plasma.png
         images/colormap-rainbow.png
         images/colormap-viridis.png
-        alpha_blending.frag
-        alpha_blending.vert
+        shaders/alpha_blending.frag
+        shaders/alpha_blending.vert
         SpacingMap.mjs
     RESOURCE_PREFIX "/qt/qml"
     IMPORTS
