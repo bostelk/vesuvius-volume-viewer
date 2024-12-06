@@ -27,6 +27,8 @@ set_target_properties(volumeraycaster PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
+include_directories(src)
+
 pkg_check_modules(BLOSC2 REQUIRED blosc2)
 include_directories(${BLOSC2_INCLUDE_DIRS})
 
@@ -40,13 +42,8 @@ find_library(TEEM_LIBRARY NAMES teem
 )
 include_directories(${TEEM_INCLUDE_DIR})
 
-pkg_check_modules(ZLIB REQUIRED zlib) # <-- TEEM dep
-
-find_library(BZIP2_LIBRARY NAMES libbz2 # <-- TEEM dep
-    HINTS {CMAKE_INSTALL_PREFIX}
-    PATH_SUFFIXES lib lib/x86_64-linux-gnu
-)
-
+find_package(ZLIB) # <-- TEEM dep
+find_package(BZip2) # <-- TEEM dep
 find_package(PNG 1.6) # <-- TEEM dep
 
 target_link_libraries(volumeraycaster PUBLIC
@@ -57,7 +54,7 @@ target_link_libraries(volumeraycaster PUBLIC
     ${BLOSC2_LIBRARIES}
     ${TEEM_LIBRARY}
     ${ZLIB_LIBRARIES}
-    ${BZIP2_LIBRARY}
+    ${BZIP2_LIBRARIES}
     ${PNG_LIBRARIES}
 )
 
